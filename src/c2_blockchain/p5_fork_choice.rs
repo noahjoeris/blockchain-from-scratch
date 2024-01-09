@@ -32,9 +32,7 @@ pub trait ForkChoice {
     /// It is always possible to compare several chains if you are able to compare
     /// two chains. Therefore this method has a provided implementation. However,
     /// it may be much more performant to write a fork-choice-specific implementation.
-    fn best_chain<'a>(candidate_chains: &[&'a [Header]]) -> &'a [Header] {
-        todo!("Exercise 1")
-    }
+    fn best_chain<'a>(candidate_chains: &[&'a [Header]]) -> &'a [Header];
 }
 
 /// The "best" chain is simply the longest chain.
@@ -42,14 +40,17 @@ pub struct LongestChainRule;
 
 impl ForkChoice for LongestChainRule {
     fn first_chain_is_better(chain_1: &[Header], chain_2: &[Header]) -> bool {
-        todo!("Exercise 1")
+        chain_1.len() > chain_2.len()
     }
 
     fn best_chain<'a>(candidate_chains: &[&'a [Header]]) -> &'a [Header] {
         // Remember, this method is provided. You _can_ solve the exercise by
         // simply deleting this block. It is up to you to decide whether this fork
         // choice warrants a custom implementation.
-        todo!("Exercise 3")
+        candidate_chains
+            .iter()
+            .max_by_key(|chain| chain.len())
+            .unwrap()
     }
 }
 
@@ -68,17 +69,44 @@ pub struct HeaviestChainRule;
 /// usage is that you create a block using the normal `Block.child()` method
 /// and then pass the block to this helper for additional mining.
 fn mine_extra_hard(block: &mut Block, threshold: u64) {
-    todo!("Exercise 4")
+    let old_block_hash = hash(&block.header);
+
+    for nonce in 0.. {
+        block.header.consensus_digest = nonce;
+        let new_block_hash = hash(&block.header);
+        if old_block_hash > new_block_hash && new_block_hash < threshold {
+            return;
+        }
+    }
 }
 
 impl ForkChoice for HeaviestChainRule {
     fn first_chain_is_better(chain_1: &[Header], chain_2: &[Header]) -> bool {
-        todo!("Exercise 5")
+        let work_chain1: u64 = chain_1
+            .iter()
+            .map(|h| THRESHOLD.checked_sub(hash(h)).unwrap_or(0))
+            .sum();
+        let work_chain2: u64 = chain_2
+            .iter()
+            .map(|h| THRESHOLD.checked_sub(hash(h)).unwrap_or(0))
+            .sum();
+
+        print!("work_chain1: {}, work_chain2: {}", work_chain1, work_chain2);
+
+        work_chain1 > work_chain2
     }
 
     fn best_chain<'a>(candidate_chains: &[&'a [Header]]) -> &'a [Header] {
         // Remember, this method is provided.
-        todo!("Exercise 6")
+        candidate_chains
+            .iter()
+            .max_by_key(|chain| {
+                chain
+                    .iter()
+                    .map(|h| THRESHOLD.checked_sub(hash(h)).unwrap_or(0))
+                    .sum::<u64>()
+            })
+            .unwrap()
     }
 }
 /// The best chain is the one with the most blocks that have even hashes.
@@ -99,12 +127,18 @@ pub struct MostBlocksWithEvenHash;
 
 impl ForkChoice for MostBlocksWithEvenHash {
     fn first_chain_is_better(chain_1: &[Header], chain_2: &[Header]) -> bool {
-        todo!("Exercise 7")
+        let even_hashes_chain1: u64 = chain_1.iter().filter(|h| hash(h) % 2 == 0).count() as u64;
+        let even_hashes_chain2: u64 = chain_2.iter().filter(|h| hash(h) % 2 == 0).count() as u64;
+
+        even_hashes_chain1 > even_hashes_chain2
     }
 
     fn best_chain<'a>(candidate_chains: &[&'a [Header]]) -> &'a [Header] {
         // Remember, this method is provided.
-        todo!("Exercise 8")
+        candidate_chains
+            .iter()
+            .max_by_key(|chain| chain.iter().filter(|h| hash(h) % 2 == 0).count() as u64)
+            .unwrap()
     }
 }
 
@@ -131,7 +165,30 @@ impl ForkChoice for MostBlocksWithEvenHash {
 /// 2. The suffix chain which is longer (non-overlapping with the common prefix)
 /// 3. The suffix chain with more work (non-overlapping with the common prefix)
 fn create_fork_one_side_longer_other_side_heavier() -> (Vec<Header>, Vec<Header>, Vec<Header>) {
-    todo!("Exercise 9")
+    let mut prefix = vec![Header::genesis()];
+    prefix.push(prefix.last().unwrap().child(hash(&[1, 2, 3]), 6));
+    prefix.push(prefix.last().unwrap().child(hash(&[3, 4, 5]), 18));
+
+    let mut suffix_1: Vec<Header> = vec![];
+
+    for i in 1..=5 {
+        let last_header = suffix_1.last().unwrap_or(&prefix.last().unwrap());
+        suffix_1.push(last_header.child(hash(&[i]), 18 + i));
+    }
+
+    let mut suffix_2: Vec<Header> = vec![];
+
+    for i in 1..=4 {
+        let last_header = suffix_2.last().unwrap_or(&prefix.last().unwrap());
+        let mut block_mined_extra_hard = Block {
+            header: last_header.child(hash(&[i]), 28 + i),
+            body: vec![i],
+        };
+        mine_extra_hard(&mut block_mined_extra_hard, THRESHOLD / 10); // 10 times harder
+        suffix_2.push(block_mined_extra_hard.header);
+    }
+
+    (prefix, suffix_1, suffix_2)
 }
 
 #[test]

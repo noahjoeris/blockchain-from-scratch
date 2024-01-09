@@ -37,12 +37,31 @@ pub struct Header {
 impl Header {
     /// Returns a new valid genesis header.
     fn genesis() -> Self {
-        todo!("Exercise 1")
+        Header {
+            parent: 0,
+            height: 0,
+            extrinsic: 0,
+            state: 0,
+            consensus_digest: 0,
+        }
     }
 
     /// Create and return a valid child header.
     fn child(&self, extrinsic: u64) -> Self {
-        todo!("Exercise 2")
+        for nonce in 0.. {
+            let try_header = Header {
+                parent: hash(&self),
+                height: self.height + 1,
+                extrinsic,
+                state: self.state + extrinsic,
+                consensus_digest: nonce,
+            };
+
+            if hash(&try_header) < THRESHOLD {
+                return try_header;
+            }
+        }
+        unreachable!();
     }
 
     /// Verify that all the given headers form a valid chain from this header to the tip.
@@ -50,7 +69,27 @@ impl Header {
     /// In addition to all the rules we had before, we now need to check that the block hash
     /// is below a specific threshold.
     fn verify_sub_chain(&self, chain: &[Header]) -> bool {
-        todo!("Exercise 3")
+        if chain.is_empty() {
+            return true;
+        }
+
+        let child = &chain[0];
+
+        // check for invalid next block
+        if child.parent != hash(&self)
+            || child.height != self.height + 1
+            || child.state != self.state + child.extrinsic
+            || hash(&child) >= THRESHOLD
+        {
+            return false;
+        }
+
+        // recursive
+        if !child.verify_sub_chain(&chain[1..]) {
+            return false;
+        }
+
+        true
     }
 
     // After the blockchain ran for a while, a political rift formed in the community.
@@ -62,13 +101,53 @@ impl Header {
     /// verify that the given headers form a valid chain.
     /// In this case "valid" means that the STATE MUST BE EVEN.
     fn verify_sub_chain_even(&self, chain: &[Header]) -> bool {
-        todo!("Exercise 4")
+        if chain.is_empty() {
+            return true;
+        }
+
+        let child = &chain[0];
+
+        // check for invalid next block
+        if child.parent != hash(&self)
+            || child.state != self.state + child.extrinsic
+            || (child.height > FORK_HEIGHT && child.state % 2 != 0)
+            || hash(&child) >= THRESHOLD
+        {
+            return false;
+        }
+
+        // recursive
+        if !child.verify_sub_chain_even(&chain[1..]) {
+            return false;
+        }
+
+        true
     }
 
     /// verify that the given headers form a valid chain.
     /// In this case "valid" means that the STATE MUST BE ODD.
     fn verify_sub_chain_odd(&self, chain: &[Header]) -> bool {
-        todo!("Exercise 5")
+        if chain.is_empty() {
+            return true;
+        }
+
+        let child = &chain[0];
+
+        // check for invalid next block
+        if child.parent != hash(&self)
+            || child.state != self.state + child.extrinsic
+            || (child.height > FORK_HEIGHT && child.state % 2 == 0)
+            || hash(&child) >= THRESHOLD
+        {
+            return false;
+        }
+
+        // recursive
+        if !child.verify_sub_chain_odd(&chain[1..]) {
+            return false;
+        }
+
+        true
     }
 }
 
@@ -89,7 +168,19 @@ impl Header {
 /// G -- 1 -- 2
 ///            \-- 3'-- 4'
 fn build_contentious_forked_chain() -> (Vec<Header>, Vec<Header>, Vec<Header>) {
-    todo!("Exercise 6")
+    let mut prefix = vec![Header::genesis()];
+    prefix.push(prefix.last().unwrap().child(1));
+    prefix.push(prefix.last().unwrap().child(1));
+
+    let mut even = vec![prefix.last().unwrap().child(2)];
+    even.push(even.last().unwrap().child(4));
+    even.push(even.last().unwrap().child(22));
+
+    let mut odd = vec![prefix.last().unwrap().child(3)];
+    odd.push(odd.last().unwrap().child(6));
+    odd.push(odd.last().unwrap().child(40));
+
+    (prefix, even, odd)
 }
 
 // To run these tests: `cargo test bc_3`
