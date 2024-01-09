@@ -33,6 +33,10 @@ pub enum User {
     Alice,
     Bob,
     Charlie,
+    Dave,
+    Eve,
+    Frank,
+    Noah,
 }
 
 //TODO Some kind of main program that allows users to interact with their state machine in a repl-like way.

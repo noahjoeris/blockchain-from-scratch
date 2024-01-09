@@ -45,7 +45,60 @@ impl StateMachine for AccountedCurrency {
     type Transition = AccountingTransaction;
 
     fn next_state(starting_state: &Balances, t: &AccountingTransaction) -> Balances {
-        todo!("Exercise 1")
+        match t {
+            AccountingTransaction::Mint { minter, amount } => match *amount {
+                0 => starting_state.clone(),
+                _ => {
+                    let mut new_state = starting_state.clone();
+                    new_state
+                        .entry(*minter)
+                        .and_modify(|balance| *balance += amount)
+                        .or_insert(*amount);
+                    new_state
+                }
+            },
+
+            AccountingTransaction::Burn { burner, amount } => {
+                let mut new_state = starting_state.clone();
+                if let Some(balance) = new_state.get_mut(burner) {
+                    if *balance > *amount {
+                        *balance -= amount;
+                    } else {
+                        new_state.remove(burner);
+                    }
+                }
+                new_state
+            }
+
+            AccountingTransaction::Transfer {
+                sender,
+                receiver,
+                amount,
+            } => match *amount {
+                0 => return starting_state.clone(),
+                _ => {
+                    let mut new_state = starting_state.clone();
+                    if let Some(sender_balance) = new_state.get_mut(sender) {
+                        match (*sender_balance).cmp(amount) {
+                            std::cmp::Ordering::Less => return new_state,
+                            _ => {
+                                if *sender_balance == *amount {
+                                    new_state.remove(sender);
+                                } else {
+                                    *sender_balance -= amount;
+                                }
+                                new_state
+                                    .entry(*receiver)
+                                    .and_modify(|balance| *balance += amount)
+                                    .or_insert(*amount);
+                                return new_state;
+                            }
+                        }
+                    }
+                    new_state
+                }
+            },
+        }
     }
 }
 

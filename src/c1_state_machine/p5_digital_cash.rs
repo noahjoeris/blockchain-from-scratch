@@ -94,8 +94,103 @@ impl StateMachine for DigitalCashSystem {
     type Transition = CashTransaction;
 
     fn next_state(starting_state: &Self::State, t: &Self::Transition) -> Self::State {
-        todo!("Exercise 1")
+        match t {
+            CashTransaction::Mint { minter, amount } => {
+                if *amount == 0 {
+                    return starting_state.clone();
+                }
+
+                let mut new_state = starting_state.clone();
+                new_state.add_bill(Bill {
+                    owner: *minter,
+                    amount: *amount,
+                    serial: new_state.next_serial(),
+                });
+                new_state
+            }
+
+            CashTransaction::Transfer { spends, receives } => {
+                // check serial max reached
+                if receives.iter().any(|b| b.serial == u64::MAX) {
+                    return starting_state.clone();
+                }
+
+                // check for duplicate serial
+                if !has_unique_serials(spends, receives) {
+                    return starting_state.clone();
+                }
+
+                // check for Bills with output of 0
+                if receives.iter().any(|b| b.amount == 0) {
+                    return starting_state.clone();
+                }
+
+                // check empty sends
+                if spends.is_empty() {
+                    return starting_state.clone();
+                }
+
+                // check if sends Bills exist in current State
+                if spends.iter().any(|b| !starting_state.bills.contains(b)) {
+                    return starting_state.clone();
+                }
+
+                // check overflow
+                if has_overflow(spends, receives) {
+                    return starting_state.clone();
+                }
+
+                // check spends >= receives
+                if (spends.iter().map(|b| b.amount).sum::<u64>())
+                    < (receives.iter().map(|b| b.amount).sum::<u64>())
+                {
+                    return starting_state.clone();
+                }
+
+                // checks passed - create new state
+                let mut new_state = starting_state.clone();
+                for bill in spends {
+                    new_state.bills.remove(bill);
+                }
+                for bill in receives {
+                    new_state.add_bill(bill.clone());
+                }
+
+                new_state
+            }
+        }
     }
+}
+
+fn has_unique_serials(sends: &[Bill], receives: &[Bill]) -> bool {
+    let mut seen_serials = HashSet::new();
+
+    for bill in sends {
+        if !seen_serials.insert(bill.serial) {
+            // If insert returns false, the serial was already in the set
+            return false;
+        }
+    }
+
+    for bill in receives {
+        if !seen_serials.insert(bill.serial) {
+            // If insert returns false, the serial was already in the set
+            return false;
+        }
+    }
+    true
+}
+
+fn has_overflow(spends: &[Bill], receives: &[Bill]) -> bool {
+    let spend_sum = spends
+        .iter()
+        .try_fold(0u64, |acc, b| acc.checked_add(b.amount));
+
+    let receive_sum = receives
+        .iter()
+        .try_fold(0u64, |acc, b| acc.checked_add(b.amount));
+
+    spend_sum.is_none() || receive_sum.is_none()
 }
 
 #[test]

@@ -58,8 +58,99 @@ impl StateMachine for Atm {
     type Transition = Action;
 
     fn next_state(starting_state: &Self::State, t: &Self::Transition) -> Self::State {
-        todo!("Exercise 4")
+        match starting_state {
+            Atm {
+                cash_inside: _,
+                expected_pin_hash: Auth::Waiting,
+                keystroke_register: _,
+            } => match t {
+                Action::SwipeCard(hash) => Atm {
+                    cash_inside: starting_state.cash_inside,
+                    expected_pin_hash: Auth::Authenticating(*hash),
+                    keystroke_register: starting_state.keystroke_register.clone(),
+                },
+                Action::PressKey(_) => starting_state.clone(),
+            },
+
+            Atm {
+                cash_inside: _,
+                expected_pin_hash: Auth::Authenticating(hash),
+                keystroke_register,
+            } => match t {
+                Action::PressKey(Key::Enter) if crate::hash(&keystroke_register) == *hash => Atm {
+                    cash_inside: starting_state.cash_inside,
+                    expected_pin_hash: Auth::Authenticated,
+                    keystroke_register: vec![],
+                },
+
+                Action::PressKey(Key::Enter) => Atm {
+                    cash_inside: starting_state.cash_inside,
+                    expected_pin_hash: Auth::Waiting,
+                    keystroke_register: vec![],
+                },
+
+                Action::PressKey(key) => {
+                    let mut new_keystrokes = keystroke_register.clone();
+                    new_keystrokes.push(key.clone());
+                    Atm {
+                        cash_inside: starting_state.cash_inside,
+                        expected_pin_hash: starting_state.expected_pin_hash.clone(),
+                        keystroke_register: new_keystrokes,
+                    }
+                }
+                Action::SwipeCard(_) => starting_state.clone(),
+            },
+
+            Atm {
+                cash_inside,
+                expected_pin_hash: Auth::Authenticated,
+                keystroke_register,
+            } => match t {
+                Action::PressKey(Key::Enter)
+                    if convert_keys_to_num(keystroke_register) <= *cash_inside as u32 =>
+                {
+                    Atm {
+                        cash_inside: starting_state.cash_inside
+                            - convert_keys_to_num(keystroke_register) as u64,
+                        expected_pin_hash: Auth::Waiting,
+                        keystroke_register: vec![],
+                    }
+                }
+                Action::PressKey(Key::Enter) => Atm {
+                    cash_inside: starting_state.cash_inside,
+                    expected_pin_hash: Auth::Waiting,
+                    keystroke_register: vec![],
+                },
+                Action::PressKey(key) => {
+                    let mut new_keystrokes = keystroke_register.clone();
+                    new_keystrokes.push(key.clone());
+                    Atm {
+                        cash_inside: *cash_inside,
+                        expected_pin_hash: Auth::Authenticated,
+                        keystroke_register: new_keystrokes,
+                    }
+                }
+                Action::SwipeCard(_) => starting_state.clone(),
+            },
+        }
     }
+}
+
+fn convert_keys_to_num(keys: &[Key]) -> u32 {
+    let len = keys.len();
+    let mut result = 0;
+
+    for (i, key) in keys.iter().enumerate() {
+        let multiplier = match key {
+            Key::One => 1,
+            Key::Two => 2,
+            Key::Three => 3,
+            Key::Four => 4,
+            _ => continue,
+        };
+        result += multiplier * 10_u32.pow((len - i - 1) as u32);
+    }
+    result
 }
 
 #[test]
