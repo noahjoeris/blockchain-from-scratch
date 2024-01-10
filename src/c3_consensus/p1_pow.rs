@@ -55,5 +55,7 @@ pub fn moderate_difficulty_pow() -> Pow {
 /// Create an instance of the PoW Consensus that behaves identically to the trivial
 /// consensus implementation for `()` from the module level.
 pub fn trivial_always_valid_pow() -> Pow {
-    todo!("Exercise 4")
+    Pow {
+        threshold: u64::max_value(),
+    }
 }
